@@ -31,15 +31,31 @@
 import { ATTACK, HEAL, RANGED_ATTACK } from "game/constants";
 import { Creep, GameObject } from "game/prototypes";
 import { getDirection, getObjectsByPrototype, getRange, getTicks } from "game/utils";
-import { Flag } from "arena";
+import { Flag, BodyPart } from "arena";
 import { Visual } from "game/visual";
 import { searchPath } from "game/path-finder";
+import { setUncaughtExceptionCaptureCallback } from "process";
 
 declare module "game/prototypes" {
   interface Creep {
     initialPos: RoomPosition;
   }
 }
+
+// Notes:
+// Use a scout to pick up additional body parts, consider one scout if you can transfer body parts
+// or round robin
+
+// Creeps have a tick lifecycle, if we are approaching that life cycle, zerg rush the opponents flag
+
+// Stay out of range of the opponent unless we're close to our flag
+  // What happens if you are scouting and opponent comes into your area, do you engage or move?
+
+// Keep units together, consider splitting 7 units each and rush across river
+// Stick to fastest terrain, hot spots on the river are probably crossings where terrain is optimal
+// Consider continous movement from split groups to opponent's flag
+
+// Melee creep in front, ranged attackers in middle, healers in the back
 
 // You can also import your files like this:
 // import {roleAttacker} from './roles/attacker.mjs';
@@ -49,6 +65,10 @@ declare module "game/prototypes" {
 // Note that you cannot assign any game objects here, since they are populated on the first tick, not when the script is initialized.
 let myCreeps: Creep[];
 let enemyCreeps: Creep[];
+let bodyParts: BodyPart[];
+let scout: Creep;
+let scoutReachedFirstCamp: Boolean = false;
+let runners: Creep[];
 let enemyFlag: Flag | undefined;
 
 // This is the only exported function from the main module. It is called every tick.
@@ -59,11 +79,18 @@ export function loop(): void {
   myCreeps = getObjectsByPrototype(Creep).filter(i => i.my);
   enemyCreeps = getObjectsByPrototype(Creep).filter(i => !i.my);
   enemyFlag = getObjectsByPrototype(Flag).find(i => !i.my);
+  
+  // [{"id":"bodyPart30","x":39,"y":61,"ticksToDecay":99,"type":"move"}]
+  bodyParts = getObjectsByPrototype(BodyPart);
+  console.log('BodyParts: ', JSON.stringify(bodyParts));
 
   // Notice how getTime is a global function, but not Game.time anymore
   if (getTicks() % 10 === 0) {
     console.log(`I have ${myCreeps.length} creeps`);
   }
+
+  // Split up into two pods, where each pod has a melee cree
+  
 
   // Run all my creeps according to their bodies
   myCreeps.forEach(creep => {
@@ -74,6 +101,9 @@ export function loop(): void {
       rangedAttacker(creep);
     }
     if (creep.body.some(i => i.type === HEAL)) {
+      if (!scout) {
+        scout = creep
+      }
       healer(creep);
     }
   });
@@ -115,7 +145,7 @@ function rangedAttacker(creep: Creep) {
   }
 
   if (enemyFlag) {
-    creep.moveTo(enemyFlag);
+    // creep.moveTo(enemyFlag);
   }
 
   const range = 3;
@@ -136,6 +166,28 @@ function healer(creep: Creep) {
     }
   }
 
+  if (scout == creep) {
+    const bodyPartRange = 3
+    const bodyPartsInRange = bodyParts.filter(i => getRange(i, creep) < bodyPartRange);
+    if (bodyPartsInRange.length > 0) {
+      creep.moveTo(bodyPartsInRange[0]);
+    } else if (enemyFlag) {
+        // const path = searchPath(creep.initialPos, {x: 68, y: 37})
+        console.log('Scout reached first camp', scoutReachedFirstCamp);
+        if (scoutReachedFirstCamp) {
+          creep.moveTo(enemyFlag)
+        } else {
+          // Move to spawn point
+          creep.moveTo({x: 68, y: 37})
+        }
+        if (getRange({x: creep.x, y: creep.y}, {x: 68, y: 37}) < 3) {
+          scoutReachedFirstCamp = true
+        }
+    }
+  } else if (enemyFlag) {
+    creep.moveTo(enemyFlag);
+  }
+
   const healTargets = myCreeps.filter(i => getRange(i, creep) <= 3).sort((a, b) => a.hits - b.hits);
 
   if (healTargets.length > 0) {
@@ -150,10 +202,6 @@ function healer(creep: Creep) {
   const enemiesInRange = enemyCreeps.filter(i => getRange(i, creep) < range);
   if (enemiesInRange.length > 0) {
     flee(creep, enemiesInRange, range);
-  }
-
-  if (enemyFlag) {
-    creep.moveTo(enemyFlag);
   }
 }
 
