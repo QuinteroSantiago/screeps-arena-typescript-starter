@@ -293,15 +293,22 @@ function flee(creep: Creep, targets: GameObject[], range: number) {
 
 
 function towerBehavior(tower: StructureTower) {
+  // Find enemy creeps with health less than 150
+  const criticalTargets = enemyCreeps.filter(creep => creep.hits < 150);
+
+  // Finding closest enemy creep within 50 tiles
   const attackTargets = tower.findInRange(enemyCreeps, 50)
     .sort((creepA, creepB) => getRange(creepA, tower) - getRange(creepB, tower));
 
-
+  // Finding my creeps within 5 tiles who do not have max health. Then selecting the one with the least health
   const potentialHealTargets = myCreeps
     .filter(creep => getRange(creep, tower) < 5 && creep.hits < creep.hitsMax)
     .sort((creepA, creepB) => creepA.hits - creepB.hits);
 
-  if (potentialHealTargets.length > 0) {
+  // Prioritize attacking critical targets
+  if (criticalTargets.length > 0) {
+    tower.attack(criticalTargets[0]);
+  } else if (potentialHealTargets.length > 0) {
     tower.heal(potentialHealTargets[0]);
   } else if (attackTargets.length) {
     tower.attack(attackTargets[0]);
