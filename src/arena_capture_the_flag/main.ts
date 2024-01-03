@@ -29,7 +29,7 @@
 
 // This stuff is arena-specific
 import { ATTACK, HEAL, RANGED_ATTACK } from "game/constants";
-import { Creep, GameObject, Id, RoomPosition} from "game/prototypes";
+import { Creep, GameObject, Id, RoomPosition, StructureTower } from "game/prototypes";
 import { getDirection, getObjectsByPrototype, getRange, getTicks } from "game/utils";
 import { Flag, BodyPart } from "arena";
 import { Visual } from "game/visual";
@@ -48,7 +48,7 @@ declare module "game/prototypes" {
 // Creeps have a tick lifecycle, if we are approaching that life cycle, zerg rush the opponents flag
 
 // Stay out of range of the opponent unless we're close to our flag
-  // What happens if you are scouting and opponent comes into your area, do you engage or move?
+// What happens if you are scouting and opponent comes into your area, do you engage or move?
 
 // Keep units together, consider splitting 7 units each and rush across river
 // Stick to fastest terrain, hot spots on the river are probably crossings where terrain is optimal
@@ -83,12 +83,14 @@ let bodyParts: BodyPart[];
 let redTeamScout: Creep;
 let blueTeamScout: Creep;
 
-let redTeamRendevouz: RoomPosition = {x: 68, y: 37}
+let redTeamRendevouz: RoomPosition = { x: 68, y: 37 }
 let redTeamReachedRendevouz: Id<Creep>[] = [];
-let blueTeamRendevouz: RoomPosition = {x: 37, y: 68}
+let blueTeamRendevouz: RoomPosition = { x: 37, y: 68 }
 let blueTeamReachedRendevouz: Id<Creep>[] = [];
 
 let enemyFlag: Flag | undefined;
+
+let myTowers: StructureTower[];
 
 // This is the only exported function from the main module. It is called every tick.
 export function loop(): void {
@@ -98,7 +100,8 @@ export function loop(): void {
   myCreeps = getObjectsByPrototype(Creep).filter(i => i.my);
   enemyCreeps = getObjectsByPrototype(Creep).filter(i => !i.my);
   enemyFlag = getObjectsByPrototype(Flag).find(i => !i.my);
-  
+  myTowers = getObjectsByPrototype(StructureTower).filter(i => i.my)
+
   // [{"id":"bodyPart30","x":39,"y":61,"ticksToDecay":99,"type":"move"}]
   bodyParts = getObjectsByPrototype(BodyPart);
 
@@ -146,6 +149,9 @@ export function loop(): void {
       healer(creep);
     }
   });
+
+  myTowers.forEach(tower => towerBehavior(tower))
+
 }
 
 function assignToTeam(creep: Creep, roleCount: number, maxRoleCount: number) {
@@ -282,5 +288,22 @@ function flee(creep: Creep, targets: GameObject[], range: number) {
   if (result.path.length > 0) {
     const direction = getDirection(result.path[0].x - creep.x, result.path[0].y - creep.y);
     creep.move(direction);
+  }
+}
+
+
+function towerBehavior(tower: StructureTower) {
+  const attackTargets = tower.findInRange(enemyCreeps, 50)
+    .sort((creepA, creepB) => getRange(creepA, tower) - getRange(creepB, tower));
+
+
+  const potentialHealTargets = myCreeps
+    .filter(creep => getRange(creep, tower) < 5 && creep.hits < creep.hitsMax)
+    .sort((creepA, creepB) => creepA.hits - creepB.hits);
+
+  if (potentialHealTargets.length > 0) {
+    tower.heal(potentialHealTargets[0]);
+  } else if (attackTargets.length) {
+    tower.attack(attackTargets[0]);
   }
 }
