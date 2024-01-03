@@ -90,6 +90,9 @@ let blueTeamReachedRendevouz: Id<Creep>[] = [];
 
 let enemyFlag: Flag | undefined;
 
+// let rendevouzTicksStart: number;
+// let rendevouzTicksMax: number = 5;
+
 let myTowers: StructureTower[];
 
 // This is the only exported function from the main module. It is called every tick.
@@ -151,7 +154,6 @@ export function loop(): void {
   });
 
   myTowers.forEach(tower => towerBehavior(tower))
-
 }
 
 function assignToTeam(creep: Creep, roleCount: number, maxRoleCount: number) {
@@ -191,8 +193,8 @@ function meleeAttacker(creep: Creep) {
     }
   );
   const targets = enemyCreeps
-    .filter(i => getRange(i, creep) < 10)
-    .sort((a, b) => getRange(a, creep) - getRange(b, creep));
+    .filter(i => getRange(i, creep) < 30)
+    .sort((a, b) => getRange(b, creep) - getRange(a, creep));
 
   if (targets.length > 0) {
     creep.moveTo(targets[0]);
@@ -219,21 +221,31 @@ function moveToGoal(creep: Creep) {
   } else {
     creep.moveTo(rendevouz)
     if (getRange(creep, rendevouz) < 3) {
+      // if (!rendevouzTicksStart) {
+      //   rendevouzTicksStart = getTicks()
+      // }
       reachedRendevouz.push(creep.id)
     }
   }
 }
 
 function rangedAttacker(creep: Creep) {
-  const targets = enemyCreeps.sort((a, b) => getRange(a, creep) - getRange(b, creep));
+  const targets = enemyCreeps.sort((a, b) => getRange(b, creep) - getRange(a, creep));
 
+  let movedToTargets = false
   if (targets.length > 0) {
-    const range = 10;
+    const range = 15;
     const targetsInRange = targets.filter(i => getRange(i, creep) < range);
-    creep.rangedAttack(targetsInRange[0]);
+    if (targetsInRange.length > 0) {
+      creep.moveTo(targetsInRange[0])
+      creep.rangedAttack(targetsInRange[0]);
+      movedToTargets = true
+    }
   }
 
-  moveToGoal(creep)
+  if (!movedToTargets) {
+    moveToGoal(creep)
+  }
 }
 
 function getTeam(creep: Creep): number {
@@ -248,7 +260,7 @@ function healer(creep: Creep) {
   const targets = myCreeps.filter(i => i !== creep && i.hits < i.hitsMax && getTeam(i) == getTeam(creep)).sort((a, b) => a.hits - b.hits);
 
   if (targets.length) {
-    creep.moveTo(targets[0]);
+     creep.moveTo(targets[0]);
   } else {
     moveToGoal(creep)
   }
